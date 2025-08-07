@@ -21,11 +21,11 @@ def get_camera_matrix(cam_pitch,cam_height):
     return proj_g2c,camera_K
 
 ''' data split '''
-train_json_paths = '/dataset/apollo/data_splits/standard/train.json'
-test_json_paths = '/dataset/apollo/data_splits/standard/test.json'
-data_base_path = '/dataset/apollo/Apollo_Sim_3D_Lane_Release'
+train_json_paths = '/kaggle/working/3D_Lane_Synthetic_Dataset/data_splits/illus_chg/train.json'
+test_json_paths = '/kaggle/working/3D_Lane_Synthetic_Dataset/data_splits/illus_chg/test.json'
+data_base_path = '/kaggle/working/Apollo_Sim_3D_Lane_Release'
 
-model_save_path = "/dataset/model/apollo/"
+model_save_path = "/kaggle/working/"
 
 input_shape = (576,1024)
 output_2d_shape = (144,256)

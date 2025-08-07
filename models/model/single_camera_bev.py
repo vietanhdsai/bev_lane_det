@@ -299,8 +299,8 @@ class BEV_LaneDet(nn.Module):  # BEV-LaneDet
             )
         )
 
-        self.s32transformer = FCTransform_((512, 8, 12), (256, 25, 5))
-        self.s64transformer = FCTransform_((1024, 4, 6), (256, 25, 5)) 
+        self.s32transformer = FCTransform_((512, 18, 32), (256, 25, 5))
+        self.s64transformer = FCTransform_((1024, 9, 16), (256, 25, 5)) 
         self.lane_head = LaneHeadResidual_Instance_with_offset_z(bev_shape, input_channel=512)
         self.is_train = train
         if self.is_train:

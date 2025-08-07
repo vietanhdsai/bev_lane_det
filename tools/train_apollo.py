@@ -1,5 +1,5 @@
 import sys
-sys.path.append('/mnt/ve_perception/wangruihao/code/BEV-LaneDet')
+sys.path.append('/kaggle/working/bev_lane_det')
 import torch
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import DataLoader
@@ -130,12 +130,13 @@ def worker_function(config_file, gpu_id, checkpoint_path=None):
         print('*' * 100, epoch)
         train_epoch(model, train_loader, optimizer, configs, epoch)
         scheduler.step()
-        save_model_dp(model, optimizer, configs.model_save_path, 'ep%03d.pth' % epoch)
-        save_model_dp(model, None, configs.model_save_path, 'latest.pth')
+        if (epoch+1) % 10 == 0:
+            save_model_dp(model, optimizer, configs.model_save_path, 'ep%03d.pth' % epoch)
+    save_model_dp(model, None, configs.model_save_path, 'latest.pth')
 
 
 # TODO template config file.
 if __name__ == '__main__':
     import warnings
     warnings.filterwarnings("ignore")
-    worker_function('./tools/apollo_config.py', gpu_id=[0,1])
+    worker_function('./apollo_config.py', gpu_id=[0,1])
