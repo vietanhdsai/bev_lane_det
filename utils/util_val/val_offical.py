@@ -12,8 +12,8 @@ class LaneEval(object):
             args.anchor_y_steps = np.array([5, 10, 15, 20, 30, 40, 50, 60, 80, 100])
         '''
 
-        self.x_min = -10
-        self.x_max = 10
+        self.x_min = -26
+        self.x_max = 12
         self.y_min = 3
         self.y_max = 103
         self.y_samples = np.linspace(self.y_min, self.y_max, num=100, endpoint=False)
@@ -215,7 +215,7 @@ class LaneEval(object):
                     'precision':Precision,
                     'f1_score':f1_score
                     }
-        pprint(dict_res)
+        print(dict_res)
         return dict_res
 
 

@@ -86,7 +86,7 @@ class OpenLane_dataset_with_offset(Dataset):
             base_points = np.linspace(x.min(), x.max(),
                                       int((x.max() - x.min()) // 0.05))
             base_points_bin = np.linspace(int(x.min()), int(x.max()),
-                                          int(int(x.max()) - int(x.min())) + 1)  # .astype(np.int)
+                                          int(int(x.max()) - int(x.min())) + 1)  # .astype(np.int32)
             if len(x) <= 1:
                 continue
             elif len(x) <= 2:
@@ -104,9 +104,9 @@ class OpenLane_dataset_with_offset(Dataset):
             z_points = function2(base_points)
             res_lane_points[idx] = np.array([base_points, y_points])  #
             res_lane_points_z[idx] = np.array([base_points, z_points])
-            res_lane_points_bin[idx] = np.array([base_points_bin, y_points_bin]).astype(np.int)
+            res_lane_points_bin[idx] = np.array([base_points_bin, y_points_bin]).astype(np.int32)
             res_lane_points_set[idx] = np.array([base_points, y_points]).astype(
-                np.int)
+                np.int32)
 
         offset_map = np.zeros((self.ipm_h, self.ipm_w))
         z_map = np.zeros((self.ipm_h, self.ipm_w))
@@ -198,7 +198,7 @@ class OpenLane_dataset_with_offset(Dataset):
             lane_ego = cam_w_extrinsics @ lane_camera_w  #
             ''' plot uv '''
             uv1 = ego2image(lane_ego[:3], cam_intrinsic, cam_extrinsics)
-            cv2.polylines(image_gt, [uv1[0:2, :].T.astype(np.int)], False, idx + 1, self.lane2d_thick)
+            cv2.polylines(image_gt, [uv1[0:2, :].T.astype(np.int32)], False, idx + 1, self.lane2d_thick)
 
             distance = np.sqrt((lane_ego_persformer[1][0] - lane_ego_persformer[1][-1]) ** 2 + (
                     lane_ego_persformer[0][0] - lane_ego_persformer[0][-1]) ** 2)

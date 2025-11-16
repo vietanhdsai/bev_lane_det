@@ -6,9 +6,9 @@ from torch.optim.lr_scheduler import _LRScheduler
 
 def load_checkpoint(checkpoint, net, optimizer=None, map_loc="cuda"):
     sd = torch.load(checkpoint, map_location=map_loc)
-    net.load_state_dict(sd['models'])
-    if optimizer and sd['optimizer']:
-        optimizer.load_state_dict(sd['optimizer'])
+    net.load_state_dict(sd['model_state'])
+    if optimizer and sd['optimizer_state']:
+        optimizer.load_state_dict(sd['optimizer_state'])
     return sd
 
 
@@ -19,7 +19,7 @@ def resume_training(checkpoint: Dict,
     # Load checkpoint
     sd = load_checkpoint(checkpoint, model, optimizer)
     # TODO: Fix warning
-    scheduler.step(sd['epoch'])
+    scheduler.step(epoch=19)
 
 
 def load_model(model, model_state_file):

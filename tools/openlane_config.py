@@ -7,14 +7,14 @@ from loader.bev_road.openlane_data import OpenLane_dataset_with_offset,OpenLane_
 from models.model.single_camera_bev import BEV_LaneDet
 
 ''' data split '''
-train_gt_paths = '/dataset/openlane/lane3d_1000/training'
-train_image_paths = '/dataset/openlane/images/training'
-val_gt_paths = '/dataset/openlane/lane3d_1000/validation'
-val_image_paths = '/dataset/openlane/images/validation'
+train_gt_paths = '/home/vietanh/Documents/LaneLine Detection/openlane/lane3d_1000_training/training'
+train_image_paths = '/home/vietanh/Documents/LaneLine Detection/openlane/images/training'
+val_gt_paths = '/home/vietanh/Documents/LaneLine Detection/openlane/lane3d_1000_validation_test/validation'
+val_image_paths = '/home/vietanh/Documents/LaneLine Detection/openlane/images/validation'
 
-model_save_path = "/dataset/model/openlane"
+model_save_path = "/home/vietanh/Documents/LaneLine Detection/openlane/openlane"
 
-input_shape = (240,360)
+input_shape = (576,1024)
 output_2d_shape = (144,256)
 
 ''' BEV range '''
@@ -24,7 +24,7 @@ meter_per_pixel = 0.5 # grid size
 bev_shape = (int((x_range[1] - x_range[0]) / meter_per_pixel),int((y_range[1] - y_range[0]) / meter_per_pixel))
 
 loader_args = dict(
-    batch_size=32,
+    batch_size=8,
     num_workers=12,
     shuffle=True
 )
@@ -49,10 +49,10 @@ def model():
 
 
 ''' optimizer '''
-epochs = 50
+epochs = 20
 optimizer = AdamW
 optimizer_params = dict(
-    lr=1e-3, betas=(0.9, 0.999), eps=1e-8,
+    lr=1e-4, betas=(0.9, 0.999), eps=1e-8,
     weight_decay=1e-2, amsgrad=False
 )
 scheduler = CosineAnnealingLR

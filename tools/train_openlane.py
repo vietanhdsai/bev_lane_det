@@ -1,5 +1,5 @@
 import sys
-sys.path.append('/mnt/ve_perception/wangruihao/code/BEV-LaneDet')
+sys.path.append('/home/vietanh/Documents/LaneLine Detection/bev_lane_det')
 import torch
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import DataLoader
@@ -10,6 +10,8 @@ from models.loss import IoULoss, NDPushPullLoss
 from utils.config_util import load_config_module
 from sklearn.metrics import f1_score
 import numpy as np
+import matplotlib.pyplot as plt
+import time
 
 
 class Combine_Model_and_Loss(torch.nn.Module):
@@ -48,7 +50,7 @@ class Combine_Model_and_Loss(torch.nn.Module):
             return pred
 
 
-def train_epoch(model, dataset, optimizer, configs, epoch):
+def train_epoch(model, dataset, optimizer, configs, epoch, loss_back_bev_hist, loss_offset_hist, loss_z_hist, f1_bev_seg_hist):
     # Last iter as mean loss of whole epoch
     model.train()
     losses_avg = {}
@@ -80,15 +82,19 @@ def train_epoch(model, dataset, optimizer, configs, epoch):
         optimizer.zero_grad()
         loss_back_total.backward()
         optimizer.step()
-        if idx % 50 == 0:
-            print(idx, loss_back_bev.item(), '*' * 10)
-        if idx % 300 == 0:
+        # if idx % 50 == 0:
+        #     print(idx, loss_back_bev.item(), '*' * 10)
+        if idx % 3000 == 0:
             target = gt_seg_data.detach().cpu().numpy().ravel()
             pred = torch.sigmoid(prediction).detach().cpu().numpy().ravel()
             f1_bev_seg = f1_score((target > 0.5).astype(np.int64), (pred > 0.5).astype(np.int64), zero_division=1)
             loss_iter = {"BEV Loss": loss_back_bev.item(), 'offset loss': loss_offset.item(), 'z loss': loss_z.item(),
                             "F1_BEV_seg": f1_bev_seg}
             # losses_show = loss_iter
+            loss_back_bev_hist.append(loss_back_bev.item())
+            loss_offset_hist.append(loss_offset.item())
+            loss_z_hist.append(loss_z.item())
+            f1_bev_seg_hist.append(f1_bev_seg)
             print(idx, loss_iter)
 
 
@@ -123,19 +129,69 @@ def worker_function(config_file, gpu_id, checkpoint_path=None):
     #     val_loss = getattr(configs, "val_loss", loss)
     #     if eval_only:
     #         loss_mean = val_dp(model, val_loader, val_loss)
-    #         print(loss_mean)
+    #         print(loss_mean) 
     #         return
+    loss_back_bev_hist = []
+    loss_offset_hist = []
+    loss_z_hist = []
+    f1_bev_seg_hist = []
 
-    for epoch in range(configs.epochs):
+
+    for epoch in range(20, 50):#configs.epochs):
+        start_time = time.time()
         print('*' * 100, epoch)
-        train_epoch(model, train_loader, optimizer, configs, epoch)
+        train_epoch(model, train_loader, optimizer, configs, epoch, loss_back_bev_hist, loss_offset_hist, loss_z_hist, f1_bev_seg_hist)
         scheduler.step()
-        save_model_dp(model, optimizer, configs.model_save_path, 'ep%03d.pth' % epoch)
-        save_model_dp(model, None, configs.model_save_path, 'latest.pth')
+        if (epoch+1) % 10 == 0:
+            save_model_dp(model, optimizer, configs.model_save_path, 'ep%03d.pth' % epoch)
+        end_time = time.time()
+        epoch_time = end_time - start_time
+        print(f"Epoch {epoch} - Time: {epoch_time:.2f} seconds")
+    save_model_dp(model, None, configs.model_save_path, 'latest.pth')
+
+    # 1. loss_back_bev
+    plt.figure()
+    plt.plot(loss_back_bev_hist, label="loss_back_bev")
+    plt.xlabel("x3000 batches")
+    plt.ylabel("Loss")
+    plt.title("Loss Back BEV")
+    plt.legend()
+    plt.savefig("loss_back_bev.png")
+    plt.close()
+
+    # 2. loss_offset
+    plt.figure()
+    plt.plot(loss_offset_hist, label="loss_offset", color="orange")
+    plt.xlabel("x3000 batches")
+    plt.ylabel("Loss")
+    plt.title("Loss Offset")
+    plt.legend()
+    plt.savefig("loss_offset.png")
+    plt.close()
+
+    # 3. loss_z
+    plt.figure()
+    plt.plot(loss_z_hist, label="loss_z", color="red")
+    plt.xlabel("x3000 batches")
+    plt.ylabel("Loss")
+    plt.title("Loss Z")
+    plt.legend()
+    plt.savefig("loss_z.png")
+    plt.close()
+
+    # 4. f1_bev_seg
+    plt.figure()
+    plt.plot(f1_bev_seg_hist, label="f1_bev_seg", color="green")
+    plt.xlabel("x3000 batches")
+    plt.ylabel("F1-score")
+    plt.title("F1 Score BEV Seg")
+    plt.legend()
+    plt.savefig("f1_bev_seg.png")
+    plt.close()
 
 
 # TODO template config file.
 if __name__ == '__main__':
     import warnings
     warnings.filterwarnings("ignore")
-    worker_function('./openlane_config.py', gpu_id=[4, 5, 6, 7])
+    worker_function('./openlane_config.py', gpu_id=[0], checkpoint_path='/home/vietanh/Documents/LaneLine Detection/openlane/openlane/ep019.pth')

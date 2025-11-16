@@ -21,31 +21,42 @@ def get_camera_matrix(cam_pitch,cam_height):
     return proj_g2c,camera_K
 
 ''' data split '''
-train_json_paths = '/kaggle/working/3D_Lane_Synthetic_Dataset/data_splits/illus_chg/train.json'
-test_json_paths = '/kaggle/working/3D_Lane_Synthetic_Dataset/data_splits/illus_chg/test.json'
-data_base_path = '/kaggle/working/Apollo_Sim_3D_Lane_Release'
+train_json_paths = '/home/vietanh/Documents/laneline_data/train.json'
+test_json_paths = '/home/vietanh/Documents/laneline_data/test_.json'
+data_base_path = '/home/vietanh/Documents/laneline_data/images'
 
-model_save_path = "/kaggle/working/"
+model_save_path = "/home/vietanh/Documents/LaneLine Detection/duong_noi/"
 
 input_shape = (576,1024)
 output_2d_shape = (144,256)
 
 ''' BEV range '''
 x_range = (3, 103)
-y_range = (-12, 12)
+y_range = (-26, 12)
 meter_per_pixel = 0.5 # grid size
 bev_shape = (int((x_range[1] - x_range[0]) / meter_per_pixel),int((y_range[1] - y_range[0]) / meter_per_pixel))
 
 loader_args = dict(
-    batch_size=8,
+    batch_size=12,
     num_workers=12,
     shuffle=True
 )
 
 ''' virtual camera config '''
 camera_ext_virtual, camera_K_virtual = get_camera_matrix(0.04325083977888603, 1.7860000133514404) # a random parameter
+# camera_K_virtual = np.array([
+#             [986.794, 0.0, 960.0],
+#             [0.0, 999.62, 540.0],
+#             [0.0, 0.0, 1.0]
+#             ], dtype=np.float64)
+# camera_ext_virtual = np.array([
+#             [ 0.99960295,  0.02720006,  0.00735492, -0.30000124],
+#             [ 0.00673841,  0.02268839, -0.99971988,  1.30157237],
+#             [-0.02735931,  0.9993725,   0.0224961,  -0.09733574],
+#             [0, 0, 0, 1]
+#             ], dtype=np.float64)
 vc_config = {}
-vc_config['use_virtual_camera'] = True
+vc_config['use_virtual_camera'] = False
 vc_config['vc_intrinsic'] = camera_K_virtual
 vc_config['vc_extrinsics'] = np.linalg.inv(camera_ext_virtual)
 vc_config['vc_image_shape'] = (1920, 1080)
@@ -53,7 +64,7 @@ vc_config['vc_image_shape'] = (1920, 1080)
 
 ''' model '''
 def model():
-    return BEV_LaneDet(bev_shape=bev_shape, output_2d_shape=output_2d_shape,train=True)
+    return BEV_LaneDet(bev_shape=bev_shape, output_2d_shape=output_2d_shape,train=False)
 
 
 ''' optimizer '''
@@ -90,6 +101,3 @@ def val_dataset():
     val_data = Apollo_dataset_with_offset_val(test_json_paths,data_base_path,
                                                 trans_image,vc_config)
     return val_data
-
-
-

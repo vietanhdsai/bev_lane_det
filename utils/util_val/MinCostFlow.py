@@ -46,17 +46,17 @@ def SolveMinCostFlow(adj_mat, cost_mat):
     cnt_nonzero_col = int(np.sum(np.sum(adj_mat, axis=0) > 0))
 
     # prepare directed graph for the flow
-    start_nodes = np.zeros(cnt_1, dtype=np.int).tolist() +\
+    start_nodes = np.zeros(cnt_1, dtype=np.int32).tolist() +\
                   np.repeat(np.array(range(1, cnt_1+1)), cnt_2).tolist() + \
                   [i for i in range(cnt_1+1, cnt_1 + cnt_2 + 1)]
     end_nodes = [i for i in range(1, cnt_1+1)] + \
                 np.repeat(np.array([i for i in range(cnt_1+1, cnt_1 + cnt_2 + 1)]).reshape([1, -1]), cnt_1, axis=0).flatten().tolist() + \
                 [cnt_1 + cnt_2 + 1 for i in range(cnt_2)]
-    capacities = np.ones(cnt_1, dtype=np.int).tolist() + adj_mat.flatten().astype(np.int).tolist() + np.ones(cnt_2, dtype=np.int).tolist()
-    costs = (np.zeros(cnt_1, dtype=np.int).tolist() + cost_mat.flatten().astype(np.int).tolist() + np.zeros(cnt_2, dtype=np.int).tolist())
+    capacities = np.ones(cnt_1, dtype=np.int32).tolist() + adj_mat.flatten().astype(np.int32).tolist() + np.ones(cnt_2, dtype=np.int32).tolist()
+    costs = (np.zeros(cnt_1, dtype=np.int32).tolist() + cost_mat.flatten().astype(np.int32).tolist() + np.zeros(cnt_2, dtype=np.int32).tolist())
     # Define an array of supplies at each node.
-    supplies = [min(cnt_nonzero_row, cnt_nonzero_col)] + np.zeros(cnt_1 + cnt_2, dtype=np.int).tolist() + [-min(cnt_nonzero_row, cnt_nonzero_col)]
-    # supplies = [min(cnt_1, cnt_2)] + np.zeros(cnt_1 + cnt_2, dtype=np.int).tolist() + [-min(cnt_1, cnt_2)]
+    supplies = [min(cnt_nonzero_row, cnt_nonzero_col)] + np.zeros(cnt_1 + cnt_2, dtype=np.int32).tolist() + [-min(cnt_nonzero_row, cnt_nonzero_col)]
+    # supplies = [min(cnt_1, cnt_2)] + np.zeros(cnt_1 + cnt_2, dtype=np.int32).tolist() + [-min(cnt_1, cnt_2)]
     source = 0
     sink = cnt_1 + cnt_2 + 1
 

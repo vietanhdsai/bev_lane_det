@@ -9,7 +9,6 @@ from torch.utils.data import Dataset
 from utils.coord_util import ego2image,IPM2ego_matrix
 from utils.standard_camera_cpu import Standard_camera
 
-
 class Apollo_dataset_with_offset(Dataset):
     def __init__(self,data_json_path,
                  dataset_base_dir,
@@ -73,7 +72,7 @@ class Apollo_dataset_with_offset(Dataset):
             base_points = np.linspace(x.min(), x.max(),
                                       int((x.max() - x.min()) // 0.05))  # 画 offset 用得 画的非常细 一个格子里面20个点
             base_points_bin = np.linspace(int(x.min()), int(x.max()),
-                                          int(int(x.max()) - int(x.min()))+1)  # .astype(np.int)
+                                          int(int(x.max()) - int(x.min()))+1)  # .astype(np.int32)
             # print(len(x),len(y),len(y))
             if len(x) == len(set(x)):
                 if len(x) <= 1:
@@ -115,12 +114,12 @@ class Apollo_dataset_with_offset(Dataset):
             y_points = function1(base_points)
             y_points_bin = function1(base_points_bin)
             z_points = function2(base_points)
-            # cv2.polylines(instance_seg, [ipm_points.T.astype(np.int)], False, idx+1, 1)
+            # cv2.polylines(instance_seg, [ipm_points.T.astype(np.int32)], False, idx+1, 1)
             res_lane_points[idx] = np.array([base_points, y_points])  # 
             res_lane_points_z[idx] = np.array([base_points, z_points])
-            res_lane_points_bin[idx] = np.array([base_points_bin, y_points_bin]).astype(np.int)  # 画bin用的
+            res_lane_points_bin[idx] = np.array([base_points_bin, y_points_bin]).astype(np.int32)  # 画bin用的
             res_lane_points_set[idx] = np.array([base_points, y_points]).astype(
-                np.int)  
+                np.int32)  
         offset_map = np.zeros((self.ipm_h, self.ipm_w))
         z_map = np.zeros((self.ipm_h, self.ipm_w))
         ipm_image = np.zeros((self.ipm_h, self.ipm_w))
@@ -145,41 +144,50 @@ class Apollo_dataset_with_offset(Dataset):
                     offset_y = 0
                 offset_map[row][col] = offset_y
                 z_map[row][col] = z
-
         return ipm_image,offset_map,z_map
 
 
     def get_seg_offset(self,idx):
         info_dict = self.cnt_list[idx]
-        name_list = info_dict['raw_file'].split('/')
-        image_path = os.path.join(self.dataset_base_dir, 'images', name_list[-2], name_list[-1])
+        name_list = info_dict['raw_file']
+        image_path = os.path.join(self.dataset_base_dir, name_list)
         image = cv2.imread(image_path)
 
         # caculate camera parameter
-        cam_height, cam_pitch = info_dict['cam_height'], info_dict['cam_pitch']
-        project_g2c, camera_k = self.get_camera_matrix(cam_pitch, cam_height)
+        camera_k = np.array([
+            [1915.73, 0.0, 960.0],
+            [0.0, 1962.58, 540.0],
+            [0.0, 0.0, 1.0]
+            ], dtype=np.float64)
+
+        project_g2c = np.array([
+                        [0.99944309,  0.03268384,  0.00672841, -0.01301257],
+                        [0.00569666,  0.03155867, -0.99948567,  1.9266477 ],
+                        [-0.03287937, 0.99896738,  0.03135491,  3.83090516],
+                        [0.0, 0.0, 0.0, 1.0]
+                    ], dtype=np.float64)
         project_c2g = np.linalg.inv(project_g2c)
 
         # caculate point
         lane_grounds = info_dict['laneLines']
         image_gt = np.zeros(image.shape[:2], dtype=np.uint8)
         matrix_IPM2ego = IPM2ego_matrix(
-            ipm_center=(int(self.x_range[1] / self.meter_per_pixel), int(self.y_range[1] / self.meter_per_pixel)),
+            ipm_center=((self.x_range[1] / self.meter_per_pixel), -(self.y_range[0] / self.meter_per_pixel)),
             m_per_pixel=self.meter_per_pixel)
         res_points_d = {}
         for lane_idx in range(len(lane_grounds)):
             # select point by visibility
-            lane_visibility = np.array(info_dict['laneLines_visibility'][lane_idx])
+            # lane_visibility = np.array(info_dict['laneLines_visibility'][lane_idx])
             lane_ground = np.array(lane_grounds[lane_idx])
-            assert lane_visibility.shape[0] == lane_ground.shape[0]
-            lane_ground = lane_ground[lane_visibility > 0.5]
+            # assert lane_visibility.shape[0] == lane_ground.shape[0]
+            # lane_ground = lane_ground[lane_visibility > 0.5]
             lane_ground = np.concatenate([lane_ground, np.ones([lane_ground.shape[0], 1])], axis=1).T
             # get image gt
             lane_camera = np.matmul(project_g2c, lane_ground)
             lane_image = camera_k @ lane_camera[:3]
             lane_image = lane_image / lane_image[2]
             lane_uv = lane_image[:2].T
-            cv2.polylines(image_gt, [lane_uv.astype(np.int)], False, lane_idx + 1, 3)
+            cv2.polylines(image_gt, [lane_uv.astype(np.int32)], False, lane_idx + 1, 3)
             x, y, z = lane_ground[1], -1 * lane_ground[0], lane_ground[2]
             ground_points = np.array([x, y])
             ipm_points = np.linalg.inv(matrix_IPM2ego[:, :2]) @ (
@@ -276,13 +284,25 @@ class Apollo_dataset_with_offset_val(Dataset):
         '''
 
         info_dict = self.cnt_list[idx]
-        name_list = info_dict['raw_file'].split('/')
-        image_path = os.path.join(self.dataset_base_dir, 'images', name_list[-2], name_list[-1])
+        name_list = info_dict['raw_file']
+        image_path = os.path.join(self.dataset_base_dir, name_list)
         image = cv2.imread(image_path)
 
         # caculate camera parameter
-        cam_height, cam_pitch = info_dict['cam_height'], info_dict['cam_pitch']
-        project_g2c, camera_k = self.get_camera_matrix(cam_pitch, cam_height)
+        # cam_height, cam_pitch = info_dict['cam_height'], info_dict['cam_pitch']
+        # project_g2c, camera_k = self.get_camera_matrix(cam_pitch, cam_height)
+        camera_k = np.array([
+            [1915.73, 0.0, 960.0],
+            [0.0, 1962.58, 540.0],
+            [0.0, 0.0, 1.0]
+            ], dtype=np.float64)
+
+        project_g2c = np.array([
+                        [0.99944309,  0.03268384,  0.00672841, -0.01301257],
+                        [0.00569666,  0.03155867, -0.99948567,  1.9266477 ],
+                        [-0.03287937, 0.99896738,  0.03135491,  3.83090516],
+                        [0.0, 0.0, 0.0, 1.0]
+                    ], dtype=np.float64)
         project_c2g = np.linalg.inv(project_g2c)
 
         ''' virtual camera '''
@@ -294,7 +314,7 @@ class Apollo_dataset_with_offset_val(Dataset):
         
         transformed = self.trans_image(image=image)
         image = transformed["image"]
-        return image,name_list[1:]
+        return image,name_list
     
 
     
@@ -316,11 +336,11 @@ class Apollo_dataset_with_offset_val(Dataset):
         return len(self.cnt_list)
 
 
-if __name__ == '__main__':
-    ''' parameter from config '''
-    from utils.config_util import load_config_module
-    config_file = '/mnt/ve_perception/wangruihao/code/BEV-LaneDet/tools/apollo_config.py'
-    configs = load_config_module(config_file)
-    dataset = configs.val_dataset()
-    for item in dataset:
-        continue
+# if __name__ == '__main__':
+#     ''' parameter from config '''
+#     from utils.config_util import load_config_module
+#     config_file = '/home/vietanh/Documents/LaneLine Detection/bev_lane_det/tools/apollo_config.py'
+#     configs = load_config_module(config_file)
+#     dataset = configs.val_dataset()
+#     for item in dataset:
+#         continue

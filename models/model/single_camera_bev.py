@@ -281,6 +281,31 @@ class Residual(nn.Module):
 
 
 class BEV_LaneDet(nn.Module):  # BEV-LaneDet
+    # def __init__(self, bev_shape, output_2d_shape, train=True):
+    #     super(BEV_LaneDet, self).__init__()
+    #     self.bb = nn.Sequential(*list(tv.models.resnet50(pretrained=True).children())[:-2])
+
+    #     self.down = naive_init_module(
+    #         Residual(
+    #             module=nn.Sequential(
+    #                 nn.Conv2d(2048, 4096, kernel_size=3, stride=2, padding=1),  # S64
+    #                 nn.BatchNorm2d(4096),
+    #                 nn.ReLU(),
+    #                 nn.Conv2d(4096, 4096, kernel_size=3, stride=1, padding=1),
+    #                 nn.BatchNorm2d(4096)
+
+    #             ),
+    #             downsample=nn.Conv2d(2048, 4096, kernel_size=3, stride=2, padding=1),
+    #         )
+    #     )
+
+    #     self.s32transformer = FCTransform_((2048, 8, 12), (1024, 25, 5))
+    #     self.s64transformer = FCTransform_((4096, 4, 6), (1024, 25, 5)) 
+    #     self.lane_head = LaneHeadResidual_Instance_with_offset_z(bev_shape, input_channel=2048)
+    #     self.is_train = train
+    #     if self.is_train:
+    #         self.lane_head_2d = LaneHeadResidual_Instance(output_2d_shape, input_channel=2048)
+
     def __init__(self, bev_shape, output_2d_shape, train=True):
         super(BEV_LaneDet, self).__init__()
         self.bb = nn.Sequential(*list(tv.models.resnet34(pretrained=True).children())[:-2])
@@ -305,6 +330,7 @@ class BEV_LaneDet(nn.Module):  # BEV-LaneDet
         self.is_train = train
         if self.is_train:
             self.lane_head_2d = LaneHeadResidual_Instance(output_2d_shape, input_channel=512)
+
 
     def forward(self, img):
         img_s32 = self.bb(img)

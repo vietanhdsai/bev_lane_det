@@ -3,12 +3,14 @@ gpu_id = [0]
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = ','.join([str(i) for i in gpu_id])
 import sys
-sys.path.append('/mnt/ve_perception/wangruihao/code/BEV-LaneDet')
+sys.path.append('/home/vietanh/Documents/bev_lane_det')
 import shutil
 import numpy as np
 import json
 import time
 from tqdm import tqdm
+from torch.utils.data import Dataset, DataLoader
+
 
 from utils.config_util import load_config_module
 from models.util.load_model import load_model
@@ -18,7 +20,7 @@ from utils.util_val.val_offical import LaneEval
 from models.model.single_camera_bev import *
 
 
-model_path = '/share/wangruihao/data/apollo_data/apollo/20221114/ep149.pth' #model path of verification
+model_path = '/home/vietanh/Documents/LaneLine Detection/duong_noi/ep049.pth' #model path of verification
 
 ''' parameter from config '''
 config_file = './apollo_config.py'
@@ -33,7 +35,7 @@ meter_per_pixel = configs.meter_per_pixel
 post_conf = 0.9 # Minimum confidence on the segmentation map for clustering
 post_emb_margin = 6.0 # embeding margin of different clusters
 post_min_cluster_size = 15 # The minimum number of points in a cluster
-tmp_save_path = '/mnt/ve_perception/wangruihao/tmp/tmp_apollo' #tmp path for save intermediate result
+tmp_save_path = '/home/vietanh/Documents/apollo' #tmp path for save intermediate result
 
 
 
@@ -52,8 +54,7 @@ class PostProcessDataset(Dataset):
                 # print('hah') #'raw_file', 'cam_height', 'cam_pitch', 'centerLines', 'laneLines', 'centerLines_visibility', 'laneLines_visibility'
                 lanes = []
                 for lane_idx in range(len(line_content['laneLines'])):
-                    lane_selected = np.array(line_content['laneLines'][lane_idx])[
-                        np.array(line_content['laneLines_visibility'][lane_idx]) > 0.5]
+                    lane_selected = np.array(line_content['laneLines'][lane_idx])
                     lanes.append(lane_selected.tolist())
                 d_gt_res[line_content['raw_file']] = lanes
         self.d_gt_res = d_gt_res
@@ -63,10 +64,11 @@ class PostProcessDataset(Dataset):
 
     def __getitem__(self, item):
         loaded = np.load(os.path.join(self.model_res_save_path, self.valid_data[item]))
+        # print(loaded.shape)
         prediction = (loaded[:, 0:1, :, :], loaded[:, 1:3, :, :])
         offset_y = loaded[:, 3:4, :, :][0][0]
         z_pred = loaded[:, 4:5, :, :][0][0]
-        files = self.valid_data[item].split('.')[0].split('__')
+        files = self.valid_data[item].split('.')[0]
         canvas, ids = embedding_post(prediction, post_conf, emb_margin=post_emb_margin, min_cluster_size=post_min_cluster_size, canvas_color=False)
         lines = bev_instance2points_with_offset_z(canvas, max_x=self.x_range[1],
                                     meter_per_pixal=(self.meter_per_pixel, self.meter_per_pixel),offset_y=offset_y,Z=z_pred)
@@ -78,9 +80,9 @@ class PostProcessDataset(Dataset):
             f_z = np.polyfit(pred_in_persformer[1], pred_in_persformer[2], 3)
             pred_in_persformer = np.array([np.poly1d(f_x)(y),y,np.poly1d(f_z)(y)])
             frame_lanes_pred.append(pred_in_persformer.T.tolist())
-        gt_key = 'images' + '/' + files[0] + '/' + files[1] + '.jpg'
+        gt_key = files + '.jpg'
         frame_lanes_gt = self.d_gt_res[gt_key]
-        with open(os.path.join(self.postprocess_save_path, files[0]+'_'+files[1] + '.json'), 'w') as f1:
+        with open(os.path.join(self.postprocess_save_path, files[0] + '.json'), 'w') as f1:
             json.dump([frame_lanes_pred, frame_lanes_gt], f1)
         return torch.zeros((3, 3))
 
@@ -108,7 +110,7 @@ def val():
         image,bn_name = item
         image = image.cuda()
         with torch.no_grad():
-            pred_ = model(image)[0]
+            pred_ = model(image)
             seg = pred_[0].detach().cpu()
             embedding = pred_[1].detach().cpu()
             offset_y = torch.sigmoid(pred_[2]).detach().cpu()
@@ -118,7 +120,7 @@ def val():
                     idx].unsqueeze(0).numpy(), z_pred[idx].unsqueeze(0).numpy()
                 tmp_res_for_save = np.concatenate((ms, me, moffset, z), axis=1)
                 save_path = os.path.join(np_save_path,
-                                         bn_name[0][idx] + '__' + bn_name[1][idx].replace('json', 'np'))
+                                         bn_name[idx].replace('json', 'np'))
                 np.save(save_path, tmp_res_for_save)
     ''' get postprocess result and save '''
     postprocess = PostProcessDataset(np_save_path, res_save_path, test_json_paths)

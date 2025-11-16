@@ -1,5 +1,5 @@
 import sys
-sys.path.append('/kaggle/working/bev_lane_det')
+sys.path.append('/home/vietanh/Documents/bev_lane_det')
 import torch
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import DataLoader
@@ -10,6 +10,7 @@ from models.loss import IoULoss, NDPushPullLoss
 from utils.config_util import load_config_module
 from sklearn.metrics import f1_score
 import numpy as np
+import time
 
 
 class Combine_Model_and_Loss(torch.nn.Module):
@@ -26,8 +27,9 @@ class Combine_Model_and_Loss(torch.nn.Module):
     def forward(self, inputs, gt_seg=None, gt_instance=None, gt_offset_y=None, gt_z=None, image_gt_segment=None,
                 image_gt_instance=None, train=True):
         res = self.model(inputs)
-        pred, emb, offset_y, z = res[0]
-        pred_2d, emb_2d = res[1]
+        pred, emb, offset_y, z = res
+        # pred, emb, offset_y, z = res[0]
+        # pred_2d, emb_2d = res[1]
         if train:
             ## 3d
             loss_seg = self.bce(pred, gt_seg) + self.iou_loss(torch.sigmoid(pred), gt_seg)
@@ -38,12 +40,14 @@ class Combine_Model_and_Loss(torch.nn.Module):
             loss_total = loss_total.unsqueeze(0)
             loss_offset = 60 * loss_offset.unsqueeze(0)
             loss_z = 30 * loss_z.unsqueeze(0)
-            ## 2d
-            loss_seg_2d = self.bce(pred_2d, image_gt_segment) + self.iou_loss(torch.sigmoid(pred_2d), image_gt_segment)
-            loss_emb_2d = self.poopoo(emb_2d, image_gt_instance)
-            loss_total_2d = 3 * loss_seg_2d + 0.5 * loss_emb_2d
-            loss_total_2d = loss_total_2d.unsqueeze(0)
-            return pred, loss_total, loss_total_2d, loss_offset, loss_z
+            # 2d
+            # loss_seg_2d = self.bce(pred_2d, image_gt_segment) + self.iou_loss(torch.sigmoid(pred_2d), image_gt_segment)
+            # loss_emb_2d = self.poopoo(emb_2d, image_gt_instance)
+            # loss_total_2d = 3 * loss_seg_2d + 0.5 * loss_emb_2d
+            # loss_total_2d = loss_total_2d.unsqueeze(0)
+            # return pred, loss_total, loss_total_2d, loss_offset, loss_z
+            return pred, loss_total, loss_offset, loss_z
+
         else:
             return pred
 
@@ -64,17 +68,24 @@ def train_epoch(model, dataset, optimizer, configs, epoch):
         z_data = z_data.cuda()
         image_gt_segment = image_gt_segment.cuda()
         image_gt_instance = image_gt_instance.cuda()
-        prediction, loss_total_bev, loss_total_2d, loss_offset, loss_z = model(input_data,
-                                                                                gt_seg_data,
-                                                                                gt_emb_data,
-                                                                                offset_y_data, z_data,
-                                                                                image_gt_segment,
-                                                                                image_gt_instance)
+        # prediction, loss_total_bev, loss_total_2d, loss_offset, loss_z = model(input_data,
+        #                                                                         gt_seg_data,
+        #                                                                         gt_emb_data,
+        #                                                                         offset_y_data, z_data,
+        #                                                                         image_gt_segment,
+        #                                                                         image_gt_instance)
+        prediction, loss_total_bev, loss_offset, loss_z = model(input_data,
+                                                                gt_seg_data,
+                                                                gt_emb_data,
+                                                                offset_y_data, z_data,
+                                                                image_gt_segment,
+                                                                image_gt_instance)
         loss_back_bev = loss_total_bev.mean()
-        loss_back_2d = loss_total_2d.mean()
+        # loss_back_2d = loss_total_2d.mean()
         loss_offset = loss_offset.mean()
         loss_z = loss_z.mean()
-        loss_back_total = loss_back_bev + 0.5 * loss_back_2d + loss_offset + loss_z
+        # loss_back_total = loss_back_bev + 0.5 * loss_back_2d + loss_offset + loss_z
+        loss_back_total = loss_back_bev + loss_offset + loss_z
         ''' caclute loss '''
 
         optimizer.zero_grad()
@@ -101,7 +112,7 @@ def worker_function(config_file, gpu_id, checkpoint_path=None):
     model = Combine_Model_and_Loss(model)
     if torch.cuda.is_available():
         model = model.cuda()
-    model = torch.nn.DataParallel(model)
+    model = torch.nn.DataParallel(model) # type: ignore
     optimizer = configs.optimizer(filter(lambda p: p.requires_grad, model.parameters()), **configs.optimizer_params)
     scheduler = getattr(configs, "scheduler", CosineAnnealingLR)(optimizer, configs.epochs)
     if checkpoint_path:
@@ -127,11 +138,15 @@ def worker_function(config_file, gpu_id, checkpoint_path=None):
     #         return
 
     for epoch in range(configs.epochs):
+        start_time = time.time()
         print('*' * 100, epoch)
         train_epoch(model, train_loader, optimizer, configs, epoch)
         scheduler.step()
         if (epoch+1) % 10 == 0:
             save_model_dp(model, optimizer, configs.model_save_path, 'ep%03d.pth' % epoch)
+        end_time = time.time()
+        epoch_time = end_time - start_time
+        print(f"Epoch {epoch} - Time: {epoch_time:.2f} seconds")
     save_model_dp(model, None, configs.model_save_path, 'latest.pth')
 
 
@@ -139,4 +154,4 @@ def worker_function(config_file, gpu_id, checkpoint_path=None):
 if __name__ == '__main__':
     import warnings
     warnings.filterwarnings("ignore")
-    worker_function('./apollo_config.py', gpu_id=[0,1])
+    worker_function('./apollo_config.py', gpu_id=[0])

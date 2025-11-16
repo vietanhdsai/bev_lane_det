@@ -33,6 +33,7 @@ def mean_col_by_row_with_offset_z(seg, offset_y, z):
 
 def bev_instance2points_with_offset_z(ids: np.ndarray, max_x=50, meter_per_pixal=(0.2, 0.2), offset_y=None, Z=None):
     center = ids.shape[1] / 2
+    # center = 26 / meter_per_pixal[1]
     lines = mean_col_by_row_with_offset_z(ids, offset_y, Z)
     points = []
     # for i in range(1, ids.max()):
@@ -44,7 +45,7 @@ def bev_instance2points_with_offset_z(ids: np.ndarray, max_x=50, meter_per_pixal
 
         x = max_x / meter_per_pixal[0] - x
         y = y * meter_per_pixal[1]
-        y -= center * meter_per_pixal[1]
+        y -= 26
         x = x * meter_per_pixal[0]
 
         y *= -1.0  # Vector is from right to left
