@@ -52,18 +52,18 @@ class InstanceEmbedding_offset_y_z(nn.Module):
             nn.Conv2d(64, 1, 3, 1, 1, bias=True)
         )
 
-        self.m_z = nn.Sequential(
-            # nn.Dropout2d(0.2),
-            nn.Conv2d(ci, 128, 3, 1, 1, bias=False),
-            nn.BatchNorm2d(128),
-            nn.ReLU(),
+        # self.m_z = nn.Sequential(
+        #     # nn.Dropout2d(0.2),
+        #     nn.Conv2d(ci, 128, 3, 1, 1, bias=False),
+        #     nn.BatchNorm2d(128),
+        #     nn.ReLU(),
 
-            nn.Conv2d(128, 64, 3, 1, 1, bias=False),
-            nn.BatchNorm2d(64),
-            nn.ReLU(),
+        #     nn.Conv2d(128, 64, 3, 1, 1, bias=False),
+        #     nn.BatchNorm2d(64),
+        #     nn.ReLU(),
 
-            nn.Conv2d(64, 1, 3, 1, 1, bias=True)
-        )
+        #     nn.Conv2d(64, 1, 3, 1, 1, bias=True)
+        # )
 
         self.me_new = nn.Sequential(
             # nn.Dropout2d(0.2),
@@ -81,12 +81,12 @@ class InstanceEmbedding_offset_y_z(nn.Module):
         naive_init_module(self.ms_new)
         naive_init_module(self.me_new)
         naive_init_module(self.m_offset_new)
-        naive_init_module(self.m_z)
+        # naive_init_module(self.m_z)
         naive_init_module(self.neck_new)
 
     def forward(self, x):
         feat = self.neck_new(x)
-        return self.ms_new(feat), self.me_new(feat), self.m_offset_new(feat), self.m_z(feat)
+        return self.ms_new(feat), self.me_new(feat), self.m_offset_new(feat)#, self.m_z(feat)
 
 
 class InstanceEmbedding(nn.Module):
@@ -281,31 +281,6 @@ class Residual(nn.Module):
 
 
 class BEV_LaneDet(nn.Module):  # BEV-LaneDet
-    # def __init__(self, bev_shape, output_2d_shape, train=True):
-    #     super(BEV_LaneDet, self).__init__()
-    #     self.bb = nn.Sequential(*list(tv.models.resnet50(pretrained=True).children())[:-2])
-
-    #     self.down = naive_init_module(
-    #         Residual(
-    #             module=nn.Sequential(
-    #                 nn.Conv2d(2048, 4096, kernel_size=3, stride=2, padding=1),  # S64
-    #                 nn.BatchNorm2d(4096),
-    #                 nn.ReLU(),
-    #                 nn.Conv2d(4096, 4096, kernel_size=3, stride=1, padding=1),
-    #                 nn.BatchNorm2d(4096)
-
-    #             ),
-    #             downsample=nn.Conv2d(2048, 4096, kernel_size=3, stride=2, padding=1),
-    #         )
-    #     )
-
-    #     self.s32transformer = FCTransform_((2048, 8, 12), (1024, 25, 5))
-    #     self.s64transformer = FCTransform_((4096, 4, 6), (1024, 25, 5)) 
-    #     self.lane_head = LaneHeadResidual_Instance_with_offset_z(bev_shape, input_channel=2048)
-    #     self.is_train = train
-    #     if self.is_train:
-    #         self.lane_head_2d = LaneHeadResidual_Instance(output_2d_shape, input_channel=2048)
-
     def __init__(self, bev_shape, output_2d_shape, train=True):
         super(BEV_LaneDet, self).__init__()
         self.bb = nn.Sequential(*list(tv.models.resnet34(pretrained=True).children())[:-2])
@@ -326,19 +301,28 @@ class BEV_LaneDet(nn.Module):  # BEV-LaneDet
 
         self.s32transformer = FCTransform_((512, 18, 32), (256, 25, 5))
         self.s64transformer = FCTransform_((1024, 9, 16), (256, 25, 5)) 
-        self.lane_head = LaneHeadResidual_Instance_with_offset_z(bev_shape, input_channel=512)
+        self.lane_head = LaneHeadResidual_Instance_with_offset_z(bev_shape, input_channel=3*512)
         self.is_train = train
         if self.is_train:
             self.lane_head_2d = LaneHeadResidual_Instance(output_2d_shape, input_channel=512)
 
 
     def forward(self, img):
+        """
+        img: [B, 3, C, H, W]
+        """
+        B, N, C, H, W = img.shape
+        img = img.reshape(B * N, C, H, W)
+
         img_s32 = self.bb(img)
         img_s64 = self.down(img_s32)
         bev_32 = self.s32transformer(img_s32)
         bev_64 = self.s64transformer(img_s64)
         bev = torch.cat([bev_64, bev_32], dim=1)
+        bev = bev.reshape(B, N, 512, bev.shape[-2], bev.shape[-1])
+        bev_concat = bev.reshape(B, N * 512, bev.shape[-2], bev.shape[-1])
+
         if self.is_train:
-            return self.lane_head(bev), self.lane_head_2d(img_s32)
+            return self.lane_head(bev_concat), self.lane_head_2d(img_s32)
         else:
-            return self.lane_head(bev)
+            return self.lane_head(bev_concat)

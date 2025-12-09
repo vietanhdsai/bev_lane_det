@@ -24,10 +24,10 @@ class Combine_Model_and_Loss(torch.nn.Module):
         self.bce_loss = nn.BCELoss()
         # self.sigmoid = nn.Sigmoid()
 
-    def forward(self, inputs, gt_seg=None, gt_instance=None, gt_offset_y=None, gt_z=None, image_gt_segment=None,
+    def forward(self, inputs, gt_seg=None, gt_instance=None, gt_offset_y=None, image_gt_segment=None,
                 image_gt_instance=None, train=True):
         res = self.model(inputs)
-        pred, emb, offset_y, z = res
+        pred, emb, offset_y = res
         # pred, emb, offset_y, z = res[0]
         # pred_2d, emb_2d = res[1]
         if train:
@@ -35,18 +35,16 @@ class Combine_Model_and_Loss(torch.nn.Module):
             loss_seg = self.bce(pred, gt_seg) + self.iou_loss(torch.sigmoid(pred), gt_seg)
             loss_emb = self.poopoo(emb, gt_instance)
             loss_offset = self.bce_loss(gt_seg * torch.sigmoid(offset_y), gt_offset_y)
-            loss_z = self.mse_loss(gt_seg * z, gt_z)
             loss_total = 3 * loss_seg + 0.5 * loss_emb
             loss_total = loss_total.unsqueeze(0)
             loss_offset = 60 * loss_offset.unsqueeze(0)
-            loss_z = 30 * loss_z.unsqueeze(0)
             # 2d
             # loss_seg_2d = self.bce(pred_2d, image_gt_segment) + self.iou_loss(torch.sigmoid(pred_2d), image_gt_segment)
             # loss_emb_2d = self.poopoo(emb_2d, image_gt_instance)
             # loss_total_2d = 3 * loss_seg_2d + 0.5 * loss_emb_2d
             # loss_total_2d = loss_total_2d.unsqueeze(0)
             # return pred, loss_total, loss_total_2d, loss_offset, loss_z
-            return pred, loss_total, loss_offset, loss_z
+            return pred, loss_total, loss_offset
 
         else:
             return pred
@@ -58,14 +56,14 @@ def train_epoch(model, dataset, optimizer, configs, epoch):
     losses_avg = {}
     '''image,image_gt_segment,image_gt_instance,ipm_gt_segment,ipm_gt_instance'''
     for idx, (
-    input_data, gt_seg_data, gt_emb_data, offset_y_data, z_data, image_gt_segment, image_gt_instance) in enumerate(
+    input_data, gt_seg_data, gt_emb_data, offset_y_data, image_gt_segment, image_gt_instance) in enumerate(
             dataset):
         # loss_back, loss_iter = forward_on_cuda(gpu, gt_data, input_data, loss, models)
         input_data = input_data.cuda()
         gt_seg_data = gt_seg_data.cuda()
         gt_emb_data = gt_emb_data.cuda()
         offset_y_data = offset_y_data.cuda()
-        z_data = z_data.cuda()
+        # z_data = z_data.cuda()
         image_gt_segment = image_gt_segment.cuda()
         image_gt_instance = image_gt_instance.cuda()
         # prediction, loss_total_bev, loss_total_2d, loss_offset, loss_z = model(input_data,
@@ -74,18 +72,17 @@ def train_epoch(model, dataset, optimizer, configs, epoch):
         #                                                                         offset_y_data, z_data,
         #                                                                         image_gt_segment,
         #                                                                         image_gt_instance)
-        prediction, loss_total_bev, loss_offset, loss_z = model(input_data,
+        prediction, loss_total_bev, loss_offset = model(input_data,
                                                                 gt_seg_data,
                                                                 gt_emb_data,
-                                                                offset_y_data, z_data,
+                                                                offset_y_data,
                                                                 image_gt_segment,
                                                                 image_gt_instance)
         loss_back_bev = loss_total_bev.mean()
         # loss_back_2d = loss_total_2d.mean()
         loss_offset = loss_offset.mean()
-        loss_z = loss_z.mean()
         # loss_back_total = loss_back_bev + 0.5 * loss_back_2d + loss_offset + loss_z
-        loss_back_total = loss_back_bev + loss_offset + loss_z
+        loss_back_total = loss_back_bev + loss_offset
         ''' caclute loss '''
 
         optimizer.zero_grad()
@@ -97,7 +94,7 @@ def train_epoch(model, dataset, optimizer, configs, epoch):
             target = gt_seg_data.detach().cpu().numpy().ravel()
             pred = torch.sigmoid(prediction).detach().cpu().numpy().ravel()
             f1_bev_seg = f1_score((target > 0.5).astype(np.int64), (pred > 0.5).astype(np.int64), zero_division=1)
-            loss_iter = {"BEV Loss": loss_back_bev.item(), 'offset loss': loss_offset.item(), 'z loss': loss_z.item(),
+            loss_iter = {"BEV Loss": loss_back_bev.item(), 'offset loss': loss_offset.item(),
                             "F1_BEV_seg": f1_bev_seg}
             # losses_show = loss_iter
             print(idx, loss_iter)

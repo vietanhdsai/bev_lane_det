@@ -20,7 +20,7 @@ from utils.util_val.val_offical import LaneEval
 from models.model.single_camera_bev import *
 
 
-model_path = '/home/vietanh/Documents/LaneLine Detection/duong_noi/ep049.pth' #model path of verification
+model_path = '/home/vietanh/Documents/LaneLine Detection/duong_noi/ep019.pth' #model path of verification
 
 ''' parameter from config '''
 config_file = './apollo_config.py'
@@ -114,7 +114,8 @@ def val():
             seg = pred_[0].detach().cpu()
             embedding = pred_[1].detach().cpu()
             offset_y = torch.sigmoid(pred_[2]).detach().cpu()
-            z_pred = pred_[3].detach().cpu()
+            # z_pred = pred_[3].detach().cpu()
+            z_pred = torch.zeros_like(offset_y, device=offset_y.device)
             for idx in range(seg.shape[0]):
                 ms, me, moffset, z = seg[idx].unsqueeze(0).numpy(), embedding[idx].unsqueeze(0).numpy(), offset_y[
                     idx].unsqueeze(0).numpy(), z_pred[idx].unsqueeze(0).numpy()

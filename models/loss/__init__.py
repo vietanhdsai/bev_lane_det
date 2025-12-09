@@ -107,6 +107,8 @@ class NDPushPullLoss(nn.Module):
         self.ignore_label = ignore_label
 
     def forward(self, featmap, gt):
+        B, C, H, W = gt.shape
+        gt = gt.reshape(B * C, 1, H, W)
         assert (featmap.shape[2:] == gt.shape[2:])
         pull_loss = []
         push_loss = []
@@ -273,6 +275,8 @@ class IoULoss(nn.Module):
         self.ignore_index = ignore_index
 
     def forward(self, outputs, targets):
+        B, C, H, W = targets.shape
+        targets = targets.reshape(B * C, 1, H, W)
         mask = (targets != self.ignore_index).float()
         targets = targets.float()
         num = torch.sum(outputs * targets * mask)

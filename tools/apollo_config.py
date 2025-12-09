@@ -22,8 +22,8 @@ def get_camera_matrix(cam_pitch,cam_height):
 
 ''' data split '''
 train_json_paths = '/home/vietanh/Documents/laneline_data/train.json'
-test_json_paths = '/home/vietanh/Documents/laneline_data/test_.json'
-data_base_path = '/home/vietanh/Documents/laneline_data/images'
+test_json_paths = '/home/vietanh/Documents/laneline_data/test.json'
+data_base_path = ['/home/vietanh/Documents/laneline_data/wf', '/home/vietanh/Documents/laneline_data/srf', '/home/vietanh/Documents/laneline_data/slf']
 
 model_save_path = "/home/vietanh/Documents/LaneLine Detection/duong_noi/"
 
@@ -37,7 +37,7 @@ meter_per_pixel = 0.5 # grid size
 bev_shape = (int((x_range[1] - x_range[0]) / meter_per_pixel),int((y_range[1] - y_range[0]) / meter_per_pixel))
 
 loader_args = dict(
-    batch_size=12,
+    batch_size=8,
     num_workers=12,
     shuffle=True
 )

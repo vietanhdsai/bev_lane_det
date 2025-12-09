@@ -150,27 +150,39 @@ class Apollo_dataset_with_offset(Dataset):
     def get_seg_offset(self,idx):
         info_dict = self.cnt_list[idx]
         name_list = info_dict['raw_file']
-        image_path = os.path.join(self.dataset_base_dir, name_list)
-        image = cv2.imread(image_path)
+        image_paths = [os.path.join(base_dir, name_list) for base_dir in self.dataset_base_dir]
+        images = [cv2.imread(image_path) for image_path in image_paths]
 
         # caculate camera parameter
-        camera_k = np.array([
-            [1915.73, 0.0, 960.0],
-            [0.0, 1962.58, 540.0],
-            [0.0, 0.0, 1.0]
-            ], dtype=np.float64)
+        camera_list = ['wf', 'srf', 'slf']
+        camera_k = []
+        project_g2c = []
+        for camera in camera_list:
+            with open(f'/home/vietanh/Downloads/camera/{camera}.json', 'r', encoding='utf-8') as f:
+                param = json.load(f)
+            K = np.array(param['intrinsic']).reshape(3, 3)
+            extrinsic = np.array(param['extrinsic']).reshape(4, 4)
+            camera_k.append(K)
+            project_g2c.append(extrinsic)
 
-        project_g2c = np.array([
-                        [0.99944309,  0.03268384,  0.00672841, -0.01301257],
-                        [0.00569666,  0.03155867, -0.99948567,  1.9266477 ],
-                        [-0.03287937, 0.99896738,  0.03135491,  3.83090516],
-                        [0.0, 0.0, 0.0, 1.0]
-                    ], dtype=np.float64)
-        project_c2g = np.linalg.inv(project_g2c)
+
+        # camera_k = np.array([
+        #     [1915.73, 0.0, 960.0],
+        #     [0.0, 1962.58, 540.0],
+        #     [0.0, 0.0, 1.0]
+        #     ], dtype=np.float64)
+
+        # project_g2c = np.array([
+        #                 [0.99944309,  0.03268384,  0.00672841, -0.01301257],
+        #                 [0.00569666,  0.03155867, -0.99948567,  1.9266477 ],
+        #                 [-0.03287937, 0.99896738,  0.03135491,  3.83090516],
+        #                 [0.0, 0.0, 0.0, 1.0]
+        #             ], dtype=np.float64)
+        # project_c2g = np.linalg.inv(project_g2c)
 
         # caculate point
         lane_grounds = info_dict['laneLines']
-        image_gt = np.zeros(image.shape[:2], dtype=np.uint8)
+        images_gt = [np.zeros(image.shape[:2], dtype=np.uint8) for image in images]
         matrix_IPM2ego = IPM2ego_matrix(
             ipm_center=((self.x_range[1] / self.meter_per_pixel), -(self.y_range[0] / self.meter_per_pixel)),
             m_per_pixel=self.meter_per_pixel)
@@ -183,11 +195,14 @@ class Apollo_dataset_with_offset(Dataset):
             # lane_ground = lane_ground[lane_visibility > 0.5]
             lane_ground = np.concatenate([lane_ground, np.ones([lane_ground.shape[0], 1])], axis=1).T
             # get image gt
-            lane_camera = np.matmul(project_g2c, lane_ground)
-            lane_image = camera_k @ lane_camera[:3]
-            lane_image = lane_image / lane_image[2]
-            lane_uv = lane_image[:2].T
-            cv2.polylines(image_gt, [lane_uv.astype(np.int32)], False, lane_idx + 1, 3)
+            for i in range(len(images_gt)):
+                lane_camera = np.matmul(project_g2c[i], lane_ground)
+                mask = lane_camera[2, :] > 0
+                lane_camera = lane_camera[:, mask]
+                lane_image = camera_k[i] @ lane_camera[:3]
+                lane_image = lane_image / lane_image[2]
+                lane_uv = lane_image[:2].T
+                cv2.polylines(images_gt[i], [lane_uv.astype(np.int32)], False, lane_idx + 1, 3)
             x, y, z = lane_ground[1], -1 * lane_ground[0], lane_ground[2]
             ground_points = np.array([x, y])
             ipm_points = np.linalg.inv(matrix_IPM2ego[:, :2]) @ (
@@ -199,15 +214,16 @@ class Apollo_dataset_with_offset(Dataset):
             res_points_d[lane_idx+1] = res_points
 
         bev_gt,offset_y_map,z_map = self.get_y_offset_and_z(res_points_d)
+        image_gt = np.stack(images_gt, axis=-1)
 
         ''' virtual camera '''
-        if self.use_virtual_camera:
-            sc = Standard_camera(self.vc_intrinsic, self.vc_extrinsics, (self.vc_image_shape[1],self.vc_image_shape[0]),
-                                 camera_k, project_c2g, image.shape[:2])
-            trans_matrix = sc.get_matrix(height=0)
-            image = cv2.warpPerspective(image, trans_matrix, self.vc_image_shape)
-            image_gt = cv2.warpPerspective(image_gt, trans_matrix, self.vc_image_shape)
-        return image,image_gt,bev_gt,offset_y_map,z_map,project_c2g,camera_k
+        # if self.use_virtual_camera:
+        #     sc = Standard_camera(self.vc_intrinsic, self.vc_extrinsics, (self.vc_image_shape[1],self.vc_image_shape[0]),
+        #                          camera_k, project_c2g, image.shape[:2])
+        #     trans_matrix = sc.get_matrix(height=0)
+        #     image = cv2.warpPerspective(image, trans_matrix, self.vc_image_shape)
+        #     image_gt = cv2.warpPerspective(image_gt, trans_matrix, self.vc_image_shape)
+        return images,image_gt,bev_gt,offset_y_map,z_map
 
 
     def __getitem__(self, idx):
@@ -215,12 +231,17 @@ class Apollo_dataset_with_offset(Dataset):
         :param idx:
         :return:
         '''
-        image, image_gt, bev_gt, offset_y_map, z_map, cam_extrinsics, cam_intrinsic = self.get_seg_offset(idx)
-        transformed = self.trans_image(image=image)
-        image = transformed["image"]
+        images, image_gt, bev_gt, offset_y_map, z_map = self.get_seg_offset(idx)
+        transformed_imgs = []
+        for image in images:
+            transformed = self.trans_image(image=image)
+            img_t = transformed["image"]       # (3, H, W)
+            transformed_imgs.append(img_t)
+        image = torch.stack(transformed_imgs, dim=0)
         ''' 2d gt'''
         image_gt = cv2.resize(image_gt, (self.output2d_size[1],self.output2d_size[0]), interpolation=cv2.INTER_NEAREST)
-        image_gt_instance = torch.tensor(image_gt).unsqueeze(0)  # h, w, c
+        image_gt = np.transpose(image_gt, (2, 0, 1))
+        image_gt_instance = torch.tensor(image_gt)
         image_gt_segment = torch.clone(image_gt_instance)
         image_gt_segment[image_gt_segment > 0] = 1
         ''' 3d gt'''
@@ -229,7 +250,7 @@ class Apollo_dataset_with_offset(Dataset):
         bev_gt_z = torch.tensor(z_map).unsqueeze(0)
         bev_gt_segment = torch.clone(bev_gt_instance)
         bev_gt_segment[bev_gt_segment > 0] = 1
-        return image, bev_gt_segment.float(), bev_gt_instance.float(),bev_gt_offset.float(),bev_gt_z.float(),image_gt_segment.float(),image_gt_instance.float()
+        return image, bev_gt_segment.float(), bev_gt_instance.float(),bev_gt_offset.float(),image_gt_segment.float(),image_gt_instance.float()
 
 
     def get_camera_matrix(self,cam_pitch,cam_height):
@@ -248,7 +269,6 @@ class Apollo_dataset_with_offset(Dataset):
 
     def __len__(self):
         return len(self.cnt_list)
-
 
 class Apollo_dataset_with_offset_val(Dataset):
     def __init__(self,data_json_path,
@@ -282,38 +302,39 @@ class Apollo_dataset_with_offset_val(Dataset):
         :param idx:
         :return:
         '''
-
         info_dict = self.cnt_list[idx]
         name_list = info_dict['raw_file']
-        image_path = os.path.join(self.dataset_base_dir, name_list)
-        image = cv2.imread(image_path)
+        image_paths = [os.path.join(base_dir, name_list) for base_dir in self.dataset_base_dir]
+        images = [cv2.imread(image_path) for image_path in image_paths]
+        image = np.concatenate(images, axis=2)
 
         # caculate camera parameter
         # cam_height, cam_pitch = info_dict['cam_height'], info_dict['cam_pitch']
         # project_g2c, camera_k = self.get_camera_matrix(cam_pitch, cam_height)
-        camera_k = np.array([
-            [1915.73, 0.0, 960.0],
-            [0.0, 1962.58, 540.0],
-            [0.0, 0.0, 1.0]
-            ], dtype=np.float64)
+        # camera_k = np.array([
+        #     [1915.73, 0.0, 960.0],
+        #     [0.0, 1962.58, 540.0],
+        #     [0.0, 0.0, 1.0]
+        #     ], dtype=np.float64)
 
-        project_g2c = np.array([
-                        [0.99944309,  0.03268384,  0.00672841, -0.01301257],
-                        [0.00569666,  0.03155867, -0.99948567,  1.9266477 ],
-                        [-0.03287937, 0.99896738,  0.03135491,  3.83090516],
-                        [0.0, 0.0, 0.0, 1.0]
-                    ], dtype=np.float64)
-        project_c2g = np.linalg.inv(project_g2c)
+        # project_g2c = np.array([
+        #                 [0.99944309,  0.03268384,  0.00672841, -0.01301257],
+        #                 [0.00569666,  0.03155867, -0.99948567,  1.9266477 ],
+        #                 [-0.03287937, 0.99896738,  0.03135491,  3.83090516],
+        #                 [0.0, 0.0, 0.0, 1.0]
+        #             ], dtype=np.float64)
+        # project_c2g = np.linalg.inv(project_g2c)
 
         ''' virtual camera '''
-        if self.use_virtual_camera:
-            sc = Standard_camera(self.vc_intrinsic, self.vc_extrinsics, (self.vc_image_shape[1],self.vc_image_shape[0]),
-                                 camera_k, project_c2g, image.shape[:2])
-            trans_matrix = sc.get_matrix(height=0)
-            image = cv2.warpPerspective(image, trans_matrix, self.vc_image_shape)
+        # if self.use_virtual_camera:
+        #     sc = Standard_camera(self.vc_intrinsic, self.vc_extrinsics, (self.vc_image_shape[1],self.vc_image_shape[0]),
+        #                          camera_k, project_c2g, image.shape[:2])
+        #     trans_matrix = sc.get_matrix(height=0)
+        #     image = cv2.warpPerspective(image, trans_matrix, self.vc_image_shape)
         
         transformed = self.trans_image(image=image)
         image = transformed["image"]
+        image = image.reshape(3, 3, image.shape[1], image.shape[2])
         return image,name_list
     
 
