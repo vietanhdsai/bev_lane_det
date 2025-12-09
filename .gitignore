@@ -1,0 +1,5 @@
+*.ipynb
+*.ep
+*.ts
+*.deb
+__pycache__/
