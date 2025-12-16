@@ -316,13 +316,25 @@ class BEV_LaneDet(nn.Module):  # BEV-LaneDet
 
         img_s32 = self.bb(img)
         img_s64 = self.down(img_s32)
+        # print(img_s32.size())
+        # print(img_s64.size())
         bev_32 = self.s32transformer(img_s32)
         bev_64 = self.s64transformer(img_s64)
         bev = torch.cat([bev_64, bev_32], dim=1)
         bev = bev.reshape(B, N, 512, bev.shape[-2], bev.shape[-1])
         bev_concat = bev.reshape(B, N * 512, bev.shape[-2], bev.shape[-1])
+        # print(bev_concat.size())
 
         if self.is_train:
             return self.lane_head(bev_concat), self.lane_head_2d(img_s32)
         else:
             return self.lane_head(bev_concat)
+
+x_range = (3, 103)
+y_range = (-26, 12)
+meter_per_pixel = 0.5 # grid size
+bev_shape = (int((x_range[1] - x_range[0]) / meter_per_pixel),int((y_range[1] - y_range[0]) / meter_per_pixel))      
+model = BEV_LaneDet(bev_shape=bev_shape, output_2d_shape=(144,256),train=False)
+x = torch.rand((1, 3, 3, 539, 959))
+output = model(x)
+
