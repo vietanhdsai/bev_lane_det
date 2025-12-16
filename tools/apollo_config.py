@@ -4,7 +4,7 @@ from torch.optim import AdamW
 from torch.optim.lr_scheduler import CosineAnnealingLR
 import numpy as np
 from loader.bev_road.apollo_data import Apollo_dataset_with_offset,Apollo_dataset_with_offset_val
-from models.model.single_camera_bev import BEV_LaneDet
+from models.model.fastbev import BEVPerceptionModel
 
 def get_camera_matrix(cam_pitch,cam_height):
     proj_g2c = np.array([[1,                             0,                              0,          0],
@@ -27,7 +27,7 @@ data_base_path = ['/home/vietanh/Documents/laneline_data/wf', '/home/vietanh/Doc
 
 model_save_path = "/home/vietanh/Documents/LaneLine Detection/duong_noi/"
 
-input_shape = (576,1024)
+input_shape = (539, 959)
 output_2d_shape = (144,256)
 
 ''' BEV range '''
@@ -37,7 +37,7 @@ meter_per_pixel = 0.5 # grid size
 bev_shape = (int((x_range[1] - x_range[0]) / meter_per_pixel),int((y_range[1] - y_range[0]) / meter_per_pixel))
 
 loader_args = dict(
-    batch_size=8,
+    batch_size=1,
     num_workers=12,
     shuffle=True
 )
@@ -63,8 +63,40 @@ vc_config['vc_image_shape'] = (1920, 1080)
 
 
 ''' model '''
+cam_order = ["wide_front_camera",
+             "right_front_camera",
+             "left_front_camera"]
+
+n_cams = len(cam_order)
+backbone_name = 'regnety_008'
+stride = [2, 4, 8, 16]
+n_voxels = [200, 200, 6]
+voxel_size = [0.5, 0.5, 1.0]
+in_channels = [64, 128, 320, 768]
+out_channel = 64
+sizes = [[0.8660, 2.5981, 1.0],
+              [0.5774, 1.7321, 1.0],  
+              [1.0, 1.0, 1.0],
+              [0.4, 0.4, 1]
+             ]
+rotations = [0, 1.57]
+
 def model():
-    return BEV_LaneDet(bev_shape=bev_shape, output_2d_shape=output_2d_shape,train=False)
+    # return BEV_LaneDet(bev_shape=bev_shape, output_2d_shape=output_2d_shape,train=False)
+    return BEVPerceptionModel(n_cams=n_cams, 
+                           projection_path="/home/vietanh/Documents/LaneLine Detection/carla_projection.json",
+                           cam_order=cam_order,
+                           backbone_name=backbone_name,
+                           scale_factor=0.5, 
+                           stride=stride,
+                           n_voxels=n_voxels, 
+                           voxel_size=voxel_size,
+                           in_channels=in_channels,
+                           out_channel=out_channel,
+                           sizes=sizes,
+                           rotations=rotations,
+                           num_classes=1,
+                           bev_shape=bev_shape)
 
 
 ''' optimizer '''
